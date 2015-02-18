@@ -32,13 +32,12 @@ class Deb::S3::CLI < Thor
   :desc     => "The suite to use in the repository Release file."
 
   class_option :codename,
-  :default  => "stable",
   :type     => :string,
   :aliases  => "-c",
   :desc     => "The codename of the APT repository."
 
   class_option :component,
-  :default  => "main",
+  :default  => "stable",
   :type     => :string,
   :aliases  => "-m",
   :desc     => "The component of the APT repository."
@@ -86,6 +85,7 @@ class Deb::S3::CLI < Thor
     "Can be public, private, or authenticated."
 
   class_option :sign,
+  :default  => "devops+debrepo@getbase.com",
   :type     => :string,
   :desc     => "GPG Sign the Release file when uploading a package, " +
     "or when verifying it after removing a package. " +
@@ -116,12 +116,13 @@ class Deb::S3::CLI < Thor
   "Uploads the given files to a S3 bucket as an APT repository."
 
   option :arch,
+  :default  => "amd64",
   :type     => :string,
   :aliases  => "-a",
   :desc     => "The architecture of the package in the APT repository."
 
   option :preserve_versions,
-  :default  => false,
+  :default  => true,
   :type     => :boolean,
   :aliases  => "-p",
   :desc     => "Whether to preserve other versions of a package " +
@@ -152,9 +153,22 @@ class Deb::S3::CLI < Thor
       error("You must specify at least one file to upload")
     end
 
+    allowed_codenames = ['precise', 'trusty']
+    error("No value provided for required options '--codename'") unless options[:codename]
+    error("Invalid value for codename or unsupported distro") unless allowed_codenames.include? options[:codename]
+
     # make sure all the files exists
     if missing_file = files.find { |pattern| Dir.glob(pattern).empty? }
       error("File '#{missing_file}' doesn't exist")
+    end
+
+    files.each do |f|
+      allowed_codenames.each do |c|
+        next if c == options[:codename]
+        if f.include? c
+          yesno("I noticed that you choose codename #{options[:codename]} but one of filenames contains #{c}, u sure?")
+        end
+      end
     end
 
     # configure AWS::S3
@@ -515,7 +529,7 @@ class Deb::S3::CLI < Thor
       missing_packages = []
 
       manifest.packages.each do |p|
-        unless Deb::S3::Utils.s3_exists? p.url_filename_encoded
+        unless Deb::S3::Utils.s3_exists? p.url_filename
           sublog("The following packages are missing:\n\n") if missing_packages.empty?
           puts(p.generate)
           puts("")
@@ -547,6 +561,14 @@ class Deb::S3::CLI < Thor
                  else
                    options[:component]
                  end
+  end
+
+  def yesno(message)
+    $stdout.puts("#{message} (y/n) ")
+    response = gets.chomp
+    if response != "y"
+      exit 1
+    end
   end
 
   def puts(*args)
