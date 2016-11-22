@@ -153,7 +153,7 @@ class Deb::S3::CLI < Thor
       error("You must specify at least one file to upload")
     end
 
-    allowed_codenames = ['precise', 'trusty']
+    allowed_codenames = ['precise', 'trusty', 'xenial']
     error("No value provided for required options '--codename'") unless options[:codename]
     error("Invalid value for codename or unsupported distro") unless allowed_codenames.include? options[:codename]
 
